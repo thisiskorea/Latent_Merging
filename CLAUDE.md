@@ -2,16 +2,26 @@
 
 ## Project Overview
 
-**Latent_Merging** is a machine learning project focused on merging techniques in latent spaces. This could involve:
-- Merging latent representations from different models
-- Interpolation and blending in latent spaces
-- Model weight merging and fusion techniques
-- Cross-modal latent space alignment
+**Latent_Merging** is a research project implementing the paper "Latent Merging: Dynamic and Reversible Composition of Large Language Models" (currently under review). This work introduces a novel paradigm for composing LLMs in representation space rather than parameter space.
+
+**Core Concept**: Instead of merging model weights (static, irreversible), we merge hidden representations (dynamic, reversible, controllable).
+
+**Key Features**:
+- Extends LERP, SLERP, and RegMean from parameter space to latent space
+- Enables layer-wise and ratio-wise control of model composition
+- Provides theoretical guarantees under RMSNorm nonlinearity
+- Demonstrates consistent improvements over weight merging on JudgeBench
+
+**Models Used**:
+- Base: Qwen2.5-7B-Instruct
+- Fine-tuned derivative: OpenThinker3-7B
 
 ## Repository Status
 
-**Current State**: New repository (initialized but empty)
+**Current State**: Research paper code repository (under review)
+**Paper Status**: Under review for scientific publication
 **Branch**: `claude/claude-md-miclwwc2pcdn3uvs-01HikorFWjxHtwWmbeXWeLKe`
+**Data-free Evaluation**: No additional training data used; pure inference-time composition
 
 ## Recommended Project Structure
 
@@ -213,25 +223,50 @@ Common dependencies for latent merging projects:
 
 ## Domain-Specific Knowledge
 
-### Latent Space Merging Concepts
+### Paper-Specific Latent Merging Framework
 
-**Linear Interpolation**:
+This project implements three merging operators extended to latent (hidden) space:
+
+**1. LERP (Linear Interpolation)**:
 ```python
-merged = alpha * latent1 + (1 - alpha) * latent2
+h' = (1 - α) * h_A + α * h_B
+```
+- Applied to hidden states instead of weights
+- Simple weighted average in Euclidean space
+- Works well in later layers (L20-L27)
+
+**2. SLERP (Spherical Linear Interpolation)**:
+```python
+h' = (sin((1-α)Ω) / sin(Ω)) * h_A + (sin(αΩ) / sin(Ω)) * h_B
+where Ω = arccos(<h_A, h_B>)
+```
+- Interpolation along geodesic on unit hypersphere
+- Better preserves geometry and prevents collapse
+- Best overall performance in experiments (74.76% vs 25.25% for weight merging)
+
+**3. RegMean (Regularized Mean)**:
+```python
+h' = mean([h_A, h_B]) - λ * R(h_i)
+```
+- Stabilized averaging with regularization
+- Reduces representation drift
+
+### Theoretical Framework
+
+**Local Second-Order Bound**:
+```
+ℓ(g(h'_α)) ≤ (1-α)ℓ(z_A) + αℓ(z_B) + O(α(1-α)K_g‖h_B - h_A‖²)
 ```
 
-**SLERP (Spherical Linear Interpolation)**:
-- Better for normalized latent vectors
-- Maintains constant norm during interpolation
+Where:
+- `K_g`: Curvature induced by RMSNorm and LM head
+- Correction terms account for nonlinearity
 
-**Task Arithmetic**:
-- Merging task vectors: `task_vector = finetuned_weights - pretrained_weights`
-- Combine multiple task vectors
-
-**Weight Averaging**:
-- Simple average: `(w1 + w2) / 2`
-- Weighted average: `alpha * w1 + (1 - alpha) * w2`
-- Fisher-weighted merging
+**Practical Guidance**:
+1. **Merge later**: Higher layers have lower curvature
+2. **Align heads**: Reduces mismatch penalty
+3. **Use SLERP**: Controls ‖h_B - h_A‖ via normalization
+4. **Higher α**: α ≈ 0.75 works best in deeper layers
 
 ### Best Practices for ML Projects
 
@@ -269,49 +304,69 @@ merged = alpha * latent1 + (1 - alpha) * latent2
 
 ## Resources and References
 
-### Key Papers (Example topics for latent merging):
-- Model soups and weight averaging
-- Task arithmetic for model editing
-- Latent space interpolation techniques
-- Cross-modal alignment methods
-- Model merging for federated learning
+### Key Papers Referenced in This Work:
+- **Model Soups** (Wortsman et al., 2022): Weight averaging for improved robustness
+- **Fisher-weighted Merging** (Matena & Raffel, 2022): Importance-weighted parameter averaging
+- **RegMean** (Jin et al., 2023): Regularized mean for stable merging
+- **Plug and Play LMs** (Dathathri et al., 2020): Latent space manipulation
+- **Task Arithmetic** (Ilharco et al., 2023): Editing models via task vectors
 
-### Useful Libraries:
-- **Hugging Face Transformers**: Pretrained models
-- **Timm**: PyTorch image models
-- **Optuna**: Hyperparameter optimization
-- **Hydra**: Configuration management
+### Evaluation Benchmarks Used:
+- **JudgeBench**: LLM-as-judge pairwise comparison framework
+- **MMLU-Pro**: Knowledge evaluation (via JudgeBench)
+- **LiveBench**: Reasoning and math tasks
+- **LiveCodeBench**: Coding evaluation
 
-## Questions to Ask the User
+### Critical Libraries:
+- **PyTorch**: Deep learning framework (required)
+- **Hugging Face Transformers**: LLM inference and loading
+- **NumPy/SciPy**: Numerical operations for merging
+- **scikit-learn**: CKA similarity computation
+- **Matplotlib/Seaborn**: Visualization of results
 
-When starting work on this project, consider asking:
+## Experiment Overview (For AI Assistant Reference)
 
-1. **What type of latent merging is the focus?**
-   - Model weight merging
-   - Latent representation merging
-   - Cross-modal alignment
+The paper includes three main experiments:
 
-2. **What framework should be used?**
-   - PyTorch, TensorFlow, JAX
+### Experiment A: Comparative Evaluation
+- **Goal**: Compare latent merging vs weight merging
+- **Benchmark**: JudgeBench (Knowledge, Reasoning, Math, Coding)
+- **Operators**: LERP, SLERP, RegMean
+- **Result**: Latent merging consistently outperforms (e.g., SLERP: 74.76% vs 25.25%)
+- **Scripts**: `experiments/scripts/run_judgebench.py`
 
-3. **What are the target applications?**
-   - Image generation
-   - NLP models
-   - Multi-task learning
+### Experiment B: Similarity Analysis
+- **Goal**: Measure representational preservation
+- **Metrics**: Midness, Arc Ratio, CKA
+- **Finding**: Latent merging better preserves geometry (CKA +0.51 improvement)
+- **Scripts**: `experiments/scripts/run_similarity.py`
 
-4. **What is the evaluation criteria?**
-   - Accuracy metrics
-   - Qualitative assessment
-   - Computational efficiency
+### Experiment C: Layer-wise Analysis
+- **Goal**: Identify optimal layers and ratios for merging
+- **Setup**: Every 5 layers (L0, L5, L10, L15, L20, L25, L27) × α ∈ {0.25, 0.50, 0.75}
+- **Finding**: Later layers (L20-L27) + higher ratios (α≈0.75) work best
+- **Scripts**: `experiments/scripts/run_layerwise.py`
 
-5. **Are there any existing baselines or papers to follow?**
+## Important Constraints
+
+1. **Data-Free**: No additional training data; pure inference-time composition
+2. **No Finetuning**: Models are used as-is without further training
+3. **Same Architecture**: Both models must be Qwen2.5 derivatives
+4. **JudgeBench Required**: Traditional accuracy metrics (MMLU exact-match) are misleading due to instability
 
 ## Updates Log
 
-- **2025-11-24**: Initial CLAUDE.md created for new repository
+- **2025-11-24** (Morning): Initial CLAUDE.md created for new repository
   - Established project structure recommendations
   - Defined development workflows and conventions
   - Added domain-specific guidelines for latent merging
+
+- **2025-11-24** (Evening): Updated for paper under review
+  - Added specific paper context and methodology
+  - Included experimental setup details
+  - Added theoretical framework and practical guidance
+  - Updated references and benchmarks
+  - Specified models: Qwen2.5-7B-Instruct and OpenThinker3-7B
 
 ---
 

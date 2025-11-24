@@ -212,21 +212,6 @@ We use **JudgeBench** for evaluation because:
 - LLM-as-judge provides robust pairwise comparison across fluency, coherence, and correctness
 - Covers four domains: Knowledge (MMLU-Pro), Reasoning (LiveBench), Math (LiveBench), Coding (LiveCodeBench)
 
-## Important Notes
-
-### Security
-- **DO NOT hardcode API keys**. Use environment variable `OPENAI_API_KEY`
-- **DO NOT commit large files** (pkl, safetensors, checkpoints) to Git
-
-### Reproducibility
-- Requires JudgeBench dataset (`datasets` library) and pkl outputs from `artifacts/`
-- Random seeds are set in code for deterministic generation
-- Model versions: Qwen2.5-7B-Instruct (base), OpenThinker3-7B (fine-tuned)
-
-### Memory Requirements
-- Latent merging requires **two models in memory simultaneously** (~14GB × 2 for 7B models)
-- Use `load_in_8bit=True` or `load_in_4bit=True` if memory-constrained
-- Each generation processes both models in parallel via PyTorch hooks
 
 
 ## License

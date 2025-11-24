@@ -1,0 +1,6 @@
+torch
+transformers
+datasets
+tqdm
+pandas
+openai>=1.40

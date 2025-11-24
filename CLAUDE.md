@@ -1,0 +1,323 @@
+# CLAUDE.md - AI Assistant Guide for Latent_Merging
+
+## Project Overview
+
+**Latent_Merging** is a machine learning project focused on merging techniques in latent spaces. This could involve:
+- Merging latent representations from different models
+- Interpolation and blending in latent spaces
+- Model weight merging and fusion techniques
+- Cross-modal latent space alignment
+
+## Repository Status
+
+**Current State**: New repository (initialized but empty)
+**Branch**: `claude/claude-md-miclwwc2pcdn3uvs-01HikorFWjxHtwWmbeXWeLKe`
+
+## Recommended Project Structure
+
+```
+Latent_Merging/
+├── src/                      # Source code
+│   ├── models/              # Model architectures
+│   ├── merging/             # Core merging algorithms
+│   ├── utils/               # Utility functions
+│   └── data/                # Data loading and preprocessing
+├── experiments/             # Experiment configurations and scripts
+├── notebooks/              # Jupyter notebooks for exploration
+├── tests/                  # Unit and integration tests
+├── configs/                # Configuration files (YAML/JSON)
+├── scripts/                # Training and evaluation scripts
+├── docs/                   # Documentation
+├── requirements.txt        # Python dependencies
+├── setup.py               # Package setup
+├── README.md              # Project documentation
+├── CLAUDE.md              # This file
+└── .gitignore            # Git ignore rules
+```
+
+## Development Workflows
+
+### Initial Setup
+
+When setting up this project for the first time:
+
+1. **Create virtual environment**:
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # Linux/Mac
+   # or
+   venv\Scripts\activate  # Windows
+   ```
+
+2. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   pip install -e .  # Install package in editable mode
+   ```
+
+3. **Set up pre-commit hooks** (if configured):
+   ```bash
+   pre-commit install
+   ```
+
+### Git Workflow
+
+- **Feature branches**: Always create feature branches from main
+- **Branch naming**: Use descriptive names like `feature/slerp-merging` or `fix/interpolation-bug`
+- **Commits**: Write clear, descriptive commit messages
+  - Format: `<type>: <description>`
+  - Types: feat, fix, docs, refactor, test, chore
+  - Example: `feat: implement SLERP interpolation for latent vectors`
+
+### Code Development
+
+1. **Before making changes**: Always read existing code first
+2. **Run tests**: Ensure tests pass before committing
+3. **Add tests**: Write tests for new functionality
+4. **Document**: Add docstrings to functions and classes
+5. **Type hints**: Use Python type hints for better code clarity
+
+## Key Conventions
+
+### Python Style
+
+- **PEP 8**: Follow PEP 8 style guidelines
+- **Line length**: 88 characters (Black formatter default) or 100 characters
+- **Imports**: Organize as stdlib, third-party, local
+- **Docstrings**: Use Google or NumPy style docstrings
+
+### Code Organization
+
+**Models** (`src/models/`):
+- PyTorch or TensorFlow model definitions
+- Each model in its own file
+- Base classes for common functionality
+
+**Merging Algorithms** (`src/merging/`):
+- Core merging techniques (linear, SLERP, task arithmetic, etc.)
+- Input: model weights, latent vectors, or representations
+- Output: merged weights or representations
+
+**Utilities** (`src/utils/`):
+- Helper functions for visualization, metrics, checkpointing
+- Keep utilities modular and reusable
+
+**Experiments** (`experiments/`):
+- Each experiment in its own directory
+- Include configuration, results, and analysis
+- Use clear naming: `exp001_baseline`, `exp002_slerp_merging`
+
+### Configuration Management
+
+- Use YAML or JSON for configurations
+- Keep hyperparameters in config files, not hardcoded
+- Example structure:
+  ```yaml
+  model:
+    type: "resnet50"
+    pretrained: true
+
+  merging:
+    method: "slerp"
+    alpha: 0.5
+
+  training:
+    batch_size: 32
+    learning_rate: 0.001
+  ```
+
+### Testing
+
+- Use `pytest` for testing
+- Test coverage: Aim for >80% on core functionality
+- Test types:
+  - Unit tests: Individual functions and methods
+  - Integration tests: Component interactions
+  - Smoke tests: Basic functionality checks
+
+### Documentation
+
+**README.md** should include:
+- Project description and motivation
+- Installation instructions
+- Quick start guide
+- Examples and usage
+- Citation information (if research)
+
+**Code documentation**:
+- All public functions/classes need docstrings
+- Include parameter types, return types, and examples
+- Document mathematical formulations for algorithms
+
+### Dependencies
+
+Common dependencies for latent merging projects:
+- **Deep Learning**: `torch` or `tensorflow`
+- **Numerical**: `numpy`, `scipy`
+- **Visualization**: `matplotlib`, `seaborn`, `tensorboard`
+- **Data**: `pandas`, `h5py`
+- **Utils**: `pyyaml`, `tqdm`, `wandb` (experiment tracking)
+
+## AI Assistant Guidelines
+
+### When Analyzing Code
+
+1. **Start broad, then narrow**: Understand overall structure before diving into details
+2. **Check dependencies**: Look at imports to understand what libraries are used
+3. **Find entry points**: Identify main scripts, training loops, inference pipelines
+4. **Understand data flow**: Trace how data moves through the system
+
+### When Writing Code
+
+1. **Match existing style**: Follow patterns already in the codebase
+2. **Avoid over-engineering**: Keep it simple and focused
+3. **Security**: Watch for:
+   - Unsafe file operations (path traversal)
+   - Unpickle from untrusted sources
+   - SQL injection (if using databases)
+   - Hardcoded credentials
+4. **Performance**: Consider:
+   - Memory usage with large models
+   - GPU memory management
+   - Batch processing efficiency
+   - Vectorization opportunities
+
+### When Making Changes
+
+1. **Read first**: Always read relevant files before modifying
+2. **Minimal changes**: Only change what's necessary
+3. **Test changes**: Run existing tests to ensure nothing breaks
+4. **Document changes**: Update docstrings and comments
+
+### Common Tasks
+
+**Adding a new merging method**:
+1. Create new file in `src/merging/`
+2. Implement the merging algorithm
+3. Add unit tests in `tests/merging/`
+4. Update documentation
+5. Add example usage in notebooks
+
+**Running experiments**:
+1. Create experiment config in `configs/`
+2. Run training script: `python scripts/train.py --config configs/experiment.yaml`
+3. Save results in `experiments/expXXX/`
+4. Document findings
+
+**Debugging**:
+1. Check tensor shapes and dtypes
+2. Verify GPU/CPU placement
+3. Check for NaN/Inf values
+4. Use proper logging (not print statements)
+5. Visualize intermediate results
+
+## Domain-Specific Knowledge
+
+### Latent Space Merging Concepts
+
+**Linear Interpolation**:
+```python
+merged = alpha * latent1 + (1 - alpha) * latent2
+```
+
+**SLERP (Spherical Linear Interpolation)**:
+- Better for normalized latent vectors
+- Maintains constant norm during interpolation
+
+**Task Arithmetic**:
+- Merging task vectors: `task_vector = finetuned_weights - pretrained_weights`
+- Combine multiple task vectors
+
+**Weight Averaging**:
+- Simple average: `(w1 + w2) / 2`
+- Weighted average: `alpha * w1 + (1 - alpha) * w2`
+- Fisher-weighted merging
+
+### Best Practices for ML Projects
+
+1. **Reproducibility**:
+   - Set random seeds
+   - Log all hyperparameters
+   - Version control data and code
+   - Track experiment configurations
+
+2. **Experiment Tracking**:
+   - Use tools like Weights & Biases, MLflow, or TensorBoard
+   - Log metrics, hyperparameters, and artifacts
+   - Compare experiments systematically
+
+3. **Model Checkpointing**:
+   - Save checkpoints regularly
+   - Keep best model based on validation metrics
+   - Include optimizer state for resuming training
+
+4. **Evaluation**:
+   - Use proper train/val/test splits
+   - Report multiple metrics
+   - Include confidence intervals or error bars
+   - Visualize results
+
+## Common Pitfalls to Avoid
+
+1. **Device mismatches**: Ensure tensors are on the same device (CPU/GPU)
+2. **Shape mismatches**: Verify tensor dimensions match expectations
+3. **Memory leaks**: Detach gradients when not needed, clear cache
+4. **Not setting eval mode**: Use `model.eval()` for inference
+5. **Forgetting to normalize**: Some merging methods require normalized inputs
+6. **Overwriting checkpoints**: Use unique names or timestamps
+7. **Hardcoded paths**: Use relative paths or configuration files
+
+## Resources and References
+
+### Key Papers (Example topics for latent merging):
+- Model soups and weight averaging
+- Task arithmetic for model editing
+- Latent space interpolation techniques
+- Cross-modal alignment methods
+- Model merging for federated learning
+
+### Useful Libraries:
+- **Hugging Face Transformers**: Pretrained models
+- **Timm**: PyTorch image models
+- **Optuna**: Hyperparameter optimization
+- **Hydra**: Configuration management
+
+## Questions to Ask the User
+
+When starting work on this project, consider asking:
+
+1. **What type of latent merging is the focus?**
+   - Model weight merging
+   - Latent representation merging
+   - Cross-modal alignment
+
+2. **What framework should be used?**
+   - PyTorch, TensorFlow, JAX
+
+3. **What are the target applications?**
+   - Image generation
+   - NLP models
+   - Multi-task learning
+
+4. **What is the evaluation criteria?**
+   - Accuracy metrics
+   - Qualitative assessment
+   - Computational efficiency
+
+5. **Are there any existing baselines or papers to follow?**
+
+## Updates Log
+
+- **2025-11-24**: Initial CLAUDE.md created for new repository
+  - Established project structure recommendations
+  - Defined development workflows and conventions
+  - Added domain-specific guidelines for latent merging
+
+---
+
+**Note**: This document should be updated as the project evolves. When the codebase grows, add specific details about:
+- Actual project structure
+- Specific model architectures used
+- Custom conventions established by the team
+- Known issues and workarounds
+- Performance benchmarks and optimization tips

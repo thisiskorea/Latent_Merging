@@ -1,274 +1,50 @@
-# Latent Merging: Dynamic and Reversible Composition of Large Language Models
+# Latent Merging Playground
 
-[![Paper Status](https://img.shields.io/badge/Status-Under%20Review-yellow)](https://github.com/thisiskorea/Latent_Merging)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+Qwen2.5-7B-Instruct(베이스)와 OpenThinker3-7B(FT) 사이에서 네 가지 병합 기법을 실험하기 위한 최소 코드/요약 결과 정리본입니다. 대용량 산출물(pkl, safetensors, 체크포인트)은 포함하지 않고, 경로/배치 방법만 안내합니다.
 
-> **Note**: This repository contains the code implementation for a paper currently under review. The paper introduces **Latent Merging**, a novel paradigm for composing large language models in representation space rather than parameter space.
+## 구성
+- `src/latent_merging.py` — LERP / SLERP / RegMean / Task Vector(Δ 주입) 핵심 클래스와 생성 유틸.
+- `src/metrics.py` — CKA, midness(구면 중점 기준) 등 평가 지표.
+- `scripts/judgebench_eval.py` — JudgeBench용 A/B 응답 평가 스크립트(LLM 심판; OpenAI API 키는 환경변수로 주입).
+- `results/` — 실험에서 나온 요약 CSV(기존 결과).
+- `artifacts/` — 실제 실험 산출물 pkl 포함(영문 파일명으로 정리):
+  - `artifacts/SLERP/`, `artifacts/Lerp/`, `artifacts/RegMean/`에 scale×step별 raw(`*.pkl`)과 요약(`*summary.pkl`) pkl
+  - `artifacts/TaskVector/`에 Task Vector 합성(`latent_merged-TaskVector.pkl`, `weight_merged-TaskVector.pkl`)
+  - `artifacts/root_pkls/`에 기타 응답/평가 pkl(`Qwen_baseline.pkl`, `OpenThinker_baseline.pkl`, `claude_latent_merging.pkl` 등)과 합성 가중치(`latent_merged-RegMean.pkl`, `weight_merged-RegMean.pkl`, `weight_merged-lerp.pkl`).
 
-## Overview
-
-Weight merging has been a common approach to combine large language models, but its static and irreversible nature limits controllability and can destabilize behavior. This work proposes **Latent Merging**, which composes models in the hidden-representation space to enable:
-
-- **Dynamic control**: Adjust merging at inference time without retraining
-- **Reversibility**: Switch between model behaviors on-demand
-- **Layer-wise selectivity**: Apply different merging strategies at different depths
-- **Stability**: Preserve semantic coherence and avoid representational collapse
-
-### Key Contributions
-
-1. **Conceptual**: Establish correspondence between weight merging and latent merging
-2. **Framework**: Unified latent merging framework generalizing LERP, SLERP, and RegMean to representation space
-3. **Theoretical**: Second-order bounds on loss under RMSNorm nonlinearity with practical guidance
-4. **Empirical**: Systematic evaluation on JudgeBench showing consistent improvements over weight merging
-
-## Paper Abstract
-
-> Weight merging is a common way to combine large language models, but its static and irreversible nature limits controllability and can destabilize behavior. We propose Latent Merging, which composes models in the hidden-representation space to enable dynamic, reversible, and layer-wise control without modifying weights. We unify classic operators—linear/spherical interpolation, and regularized means—under a single operator view and extend them from parameters to latents. We derive local second-order bounds on loss change that account for RMSNorm nonlinearity and head mismatch, yielding practical guidance (merge later; align heads) and stability guarantees. In data-free evaluation on Qwen2.5-7B-Instruct and its fine-tuned derivative, Latent Merging consistently surpasses weight merging on JudgeBench across reasoning, knowledge, mathematics, and coding.
-
-## Installation
-
-### Prerequisites
-
-- Python 3.8+
-- CUDA-capable GPU (recommended for LLM inference)
-- 16GB+ RAM (32GB+ recommended for 7B models)
-
-### Setup
-
+## 설치
 ```bash
-# Clone the repository
-git clone https://github.com/thisiskorea/Latent_Merging.git
-cd Latent_Merging
-
-# Create virtual environment
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
+python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
-
-# Install in editable mode
-pip install -e .
 ```
+필수: `torch`, `transformers`, `datasets`, `tqdm`, `pandas`, `openai`(v1) 등.
 
-### Expected Dependencies
+## 대용량 파일 배치(별도 다운로드/복사)
+- 모델 체크포인트: `헬스케어_모델/` 등은 루트나 원하는 경로에 두고, 스크립트 인자로 경로 지정.
+- 응답/병합 결과: `SLERP/`, `Lerp/`, `RegMean/`, `Task Vector/`에 있는 `*.pkl`을 필요 시 복사해 동일 경로에 두면 평가 스크립트가 읽을 수 있습니다.
+- 합성 가중치: `weight_merged-*.pkl`, `latent_merged-*.pkl` 파일도 동일하게 별도 보관 후 참조 경로를 넘기세요.
 
-```
-torch>=2.0.0
-transformers>=4.35.0
-numpy>=1.24.0
-scipy>=1.10.0
-scikit-learn>=1.3.0
-pyyaml>=6.0
-tqdm>=4.65.0
-matplotlib>=3.7.0
-seaborn>=0.12.0
-```
+## 사용 예시
+- JudgeBench 평가(응답 pkl 두 개 비교):
+  ```bash
+  OPENAI_API_KEY=... python scripts/judgebench_eval.py \
+    --path-a SLERP/0.5_0.pkl \
+    --path-b Openthinker_비교용.pkl \
+    --judge-model gpt-4o-mini \
+    --out results/judgebench_eval.jsonl
+  ```
+- LERP/SLERP 생성:
+  ```python
+  from src.latent_merging import get_model, get_tokenizer, latent_mix_generate
+  tok = get_tokenizer("Qwen/Qwen2.5-7B-Instruct")
+  base = get_model("Qwen/Qwen2.5-7B-Instruct")
+  ft = get_model("open-thoughts/OpenThinker3-7B")
+  msgs = [{"role":"user","content":"간단히 자기소개해줘."}]
+  text = latent_mix_generate(base, ft, tok, messages=msgs, mix_layer=20, beta=0.5, mode="slerp")
+  print(text)
+  ```
+- RegMean/Task Vector는 동일 파일에서 `latent_regmean_generate`, `delta_generate`/`ActivationSteerer`를 참고하세요.
 
-## Repository Structure
-
-```
-Latent_Merging/
-├── src/                      # Source code
-│   ├── merging/             # Core latent merging algorithms
-│   │   ├── lerp.py          # Linear interpolation
-│   │   ├── slerp.py         # Spherical linear interpolation
-│   │   └── regmean.py       # Regularized mean
-│   ├── models/              # Model wrappers and utilities
-│   ├── evaluation/          # JudgeBench evaluation scripts
-│   └── utils/               # Helper functions
-├── experiments/             # Experiment configurations
-│   ├── configs/             # YAML configuration files
-│   └── scripts/             # Evaluation and analysis scripts
-├── notebooks/               # Jupyter notebooks for analysis
-├── results/                 # Experimental results and figures
-├── tests/                   # Unit tests
-├── requirements.txt         # Python dependencies
-├── setup.py                 # Package installation
-├── README.md                # This file
-└── CLAUDE.md                # AI assistant guide
-```
-
-## Quick Start
-
-### Basic Usage
-
-```python
-from src.merging import LatentMerger
-from transformers import AutoModelForCausalLM, AutoTokenizer
-
-# Load models
-model_a = AutoModelForCausalLM.from_pretrained("Qwen/Qwen2.5-7B-Instruct")
-model_b = AutoModelForCausalLM.from_pretrained("open-thoughts/OpenThinker3-7B")
-tokenizer = AutoTokenizer.from_pretrained("Qwen/Qwen2.5-7B-Instruct")
-
-# Initialize latent merger
-merger = LatentMerger(
-    model_a=model_a,
-    model_b=model_b,
-    method="slerp",  # Options: "lerp", "slerp", "regmean"
-    alpha=0.5,       # Mixing ratio
-    merge_layers=[20, 21, 22, 23, 24, 25, 26, 27]  # Layer-wise control
-)
-
-# Generate with merged representations
-prompt = "Explain the concept of gradient descent."
-inputs = tokenizer(prompt, return_tensors="pt")
-outputs = merger.generate(**inputs, max_length=512)
-print(tokenizer.decode(outputs[0]))
-```
-
-### Running Experiments
-
-```bash
-# Experiment A: Comparative evaluation (Weight vs Latent Merging)
-python experiments/scripts/run_judgebench.py \
-    --config experiments/configs/exp_a_comparison.yaml \
-    --output results/exp_a/
-
-# Experiment B: Latent space similarity analysis
-python experiments/scripts/run_similarity.py \
-    --config experiments/configs/exp_b_similarity.yaml \
-    --output results/exp_b/
-
-# Experiment C: Layer-wise and ratio-wise analysis
-python experiments/scripts/run_layerwise.py \
-    --config experiments/configs/exp_c_layerwise.yaml \
-    --output results/exp_c/
-```
-
-## Methodology
-
-### Merging Operators
-
-#### 1. Linear Interpolation (LERP)
-```python
-h' = (1 - α) * h_A + α * h_B
-```
-Simple weighted average in Euclidean space.
-
-#### 2. Spherical Linear Interpolation (SLERP)
-```python
-h' = (sin((1-α)Ω) / sin(Ω)) * h_A + (sin(αΩ) / sin(Ω)) * h_B
-where Ω = arccos(<h_A, h_B>)
-```
-Interpolation along the geodesic on the unit hypersphere.
-
-#### 3. Regularized Mean (RegMean)
-```python
-h' = mean([h_A, h_B]) - λ * R(h_i)
-```
-Stabilized averaging with regularization.
-
-### Theoretical Framework
-
-We provide **local second-order bounds** on loss change under latent merging:
-
-```
-ℓ(g(h'_α)) ≤ (1-α)ℓ(z_A) + αℓ(z_B) + O(α(1-α)K_g‖h_B - h_A‖²)
-```
-
-where `K_g` captures the curvature induced by RMSNorm and the LM head.
-
-**Key insights**:
-- Merge at later layers (lower curvature)
-- Align LM heads across models
-- Use SLERP to control ‖h_B - h_A‖
-
-## Experimental Results
-
-### A. JudgeBench Evaluation
-
-| Method  | Knowledge (Latent/Weight) | Reasoning | Math | Coding | Overall |
-|---------|---------------------------|-----------|------|--------|---------|
-| SLERP   | 59.42 / 40.59            | 100.00 / 0.00 | 86.37 / 13.64 | 98.34 / 1.67 | **74.76 / 25.25** |
-| LERP    | 98.03 / 1.97             | 91.31 / 8.69  | 98.53 / 1.47  | 100.00 / 0.00 | **97.15 / 2.85** |
-| RegMean | 74.06 / 25.94            | 60.00 / 40.00 | 58.82 / 41.18 | 74.19 / 25.81 | **69.82 / 30.18** |
-
-**Latent merging consistently outperforms weight merging across all categories.**
-
-### B. Representation Similarity
-
-| Method  | Midness ↑ (L/W) | Arc Deviation ↓ (L/W) | CKA ↑ (L/W) |
-|---------|-----------------|----------------------|-------------|
-| SLERP   | **0.80** / 0.61 | **0.12** / 0.19      | **0.89** / 0.35 |
-| LERP    | **0.77** / 0.64 | **0.04** / 0.32      | **0.83** / 0.32 |
-| RegMean | **0.78** / 0.64 | **0.02** / 0.16      | **0.83** / 0.35 |
-
-Latent merging preserves representational geometry more effectively.
-
-### C. Layer-wise Analysis
-
-- **Later layers** (L20-L27) yield substantially larger gains
-- **Higher ratios** (α ≈ 0.75) work best in deeper layers
-- **Operator-specific nuances** but consistent overall trend
-
-## Evaluation Benchmarks
-
-We use **JudgeBench** for evaluation, which employs LLM-as-judge to assess:
-- **Knowledge**: MMLU-Pro
-- **Reasoning**: LiveBench reasoning tasks
-- **Math**: LiveBench math problems
-- **Coding**: LiveCodeBench
-
-Traditional accuracy metrics (exact match) can be misleading due to formatting sensitivity and instability in merged models. JudgeBench provides robust pairwise comparison.
-
-## Models
-
-- **Base Model**: [Qwen2.5-7B-Instruct](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct)
-- **Fine-tuned Derivative**: [OpenThinker3-7B](https://huggingface.co/open-thoughts/OpenThinker3-7B)
-
-Both models share the same architecture, enabling clean comparison.
-
-## Limitations
-
-- **Inference Overhead**: Latent merging requires running two models in parallel, increasing computational cost
-- **Source Model Ceiling**: Performance is bounded by the capabilities of source models
-- **Architecture Requirements**: Currently tested on Transformer-based LLMs with similar architectures
-
-## Citation
-
-If you find this work useful, please cite our paper (citation will be added upon publication):
-
-```bibtex
-@article{kim2025latent,
-  title={Latent Merging: Dynamic and Reversible Composition of Large Language Models},
-  author={Kim, JaeSeong and Lee, Suan},
-  journal={Under Review},
-  year={2025}
-}
-```
-
-## Data Availability
-
-Evaluation outputs and intermediate representations are available in this repository.
-
-## Code Availability
-
-All code for implementing latent merging operators and reproducing experiments is available in this repository.
-
-## Funding
-
-This work was supported by the Technological Innovation R&D Program [RS-2024-00508856] funded by the Ministry of SMEs and Startups (MSS, Korea).
-
-## Contact
-
-- **JaeSeong Kim** - Semyung University
-- **Suan Lee** (Corresponding author) - suanlee@semyung.ac.kr
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Acknowledgments
-
-We thank the developers of:
-- Hugging Face Transformers
-- PyTorch
-- JudgeBench, LiveBench, and LiveCodeBench evaluation frameworks
-- Qwen and OpenThinker3 model teams
-
----
-
-**Disclaimer**: This repository contains research code for a paper under review. Implementation details may be updated based on reviewer feedback.
+## 주의
+- API 키를 하드코딩하지 마세요(환경변수 `OPENAI_API_KEY` 사용).
+- 결과 재현을 위해선 JudgeBench 데이터셋(`datasets` 라이브러리)과 위 경로의 pkl 산출물이 필요합니다. 큰 파일은 GitHub에 올리지 말고 외부 스토리지를 활용하세요.***

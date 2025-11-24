@@ -228,39 +228,9 @@ We use **JudgeBench** for evaluation because:
 - Use `load_in_8bit=True` or `load_in_4bit=True` if memory-constrained
 - Each generation processes both models in parallel via PyTorch hooks
 
-## Citation
-
-If you find this work useful, please cite our paper (citation will be added upon publication):
-
-```bibtex
-@article{kim2025latent,
-  title={Latent Merging: Dynamic and Reversible Composition of Large Language Models},
-  author={Kim, JaeSeong and Lee, Suan},
-  journal={Under Review},
-  year={2025}
-}
-```
-
-## Contact
-
-- **JaeSeong Kim** - Semyung University
-- **Suan Lee** (Corresponding author) - suanlee@semyung.ac.kr
-
-## Acknowledgments
-
-This work was supported by the Technological Innovation R&D Program [RS-2024-00508856] funded by the Ministry of SMEs and Startups (MSS, Korea).
-
-We thank:
-- Hugging Face for the Transformers library
-- Qwen and OpenThinker3 model teams
-- JudgeBench, LiveBench, and LiveCodeBench evaluation frameworks
 
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
 
----
 
-**For detailed implementation guide and AI assistant documentation**, see [CLAUDE.md](CLAUDE.md).
-
-**Disclaimer**: This is research code for a paper under review. Implementation details may be updated based on reviewer feedback.

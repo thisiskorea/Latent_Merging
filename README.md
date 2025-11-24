@@ -1,50 +1,221 @@
-# Latent Merging Playground
+# Latent Merging: Dynamic and Reversible Composition of Large Language Models
 
-Qwen2.5-7B-Instruct(베이스)와 OpenThinker3-7B(FT) 사이에서 네 가지 병합 기법을 실험하기 위한 최소 코드/요약 결과 정리본입니다. 대용량 산출물(pkl, safetensors, 체크포인트)은 포함하지 않고, 경로/배치 방법만 안내합니다.
+[![Paper Status](https://img.shields.io/badge/Status-Under%20Review-yellow)](https://github.com/thisiskorea/Latent_Merging)
+[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
 
-## 구성
-- `src/latent_merging.py` — LERP / SLERP / RegMean / Task Vector(Δ 주입) 핵심 클래스와 생성 유틸.
-- `src/metrics.py` — CKA, midness(구면 중점 기준) 등 평가 지표.
-- `scripts/judgebench_eval.py` — JudgeBench용 A/B 응답 평가 스크립트(LLM 심판; OpenAI API 키는 환경변수로 주입).
-- `results/` — 실험에서 나온 요약 CSV(기존 결과).
-- `artifacts/` — 실제 실험 산출물 pkl 포함(영문 파일명으로 정리):
-  - `artifacts/SLERP/`, `artifacts/Lerp/`, `artifacts/RegMean/`에 scale×step별 raw(`*.pkl`)과 요약(`*summary.pkl`) pkl
-  - `artifacts/TaskVector/`에 Task Vector 합성(`latent_merged-TaskVector.pkl`, `weight_merged-TaskVector.pkl`)
-  - `artifacts/root_pkls/`에 기타 응답/평가 pkl(`Qwen_baseline.pkl`, `OpenThinker_baseline.pkl`, `claude_latent_merging.pkl` 등)과 합성 가중치(`latent_merged-RegMean.pkl`, `weight_merged-RegMean.pkl`, `weight_merged-lerp.pkl`).
+> **Research Code Repository**: This repository contains the implementation code for a paper currently under review. The paper introduces **Latent Merging**, a novel paradigm for composing large language models in representation space rather than parameter space.
 
-## 설치
+## Overview
+
+This repository provides minimal, reproducible code for experimenting with four merging techniques between **Qwen2.5-7B-Instruct** (base) and **OpenThinker3-7B** (fine-tuned). Large artifacts (pkl files, safetensors, checkpoints) are excluded from the repository; only code and result summaries are included.
+
+**Key Innovation**: Instead of merging model weights (static, irreversible), we merge hidden representations (dynamic, reversible, controllable) during inference, enabling layer-wise control without modifying parameters.
+
+## Repository Structure
+
+```
+Latent_Merging/
+├── src/
+│   ├── latent_merging.py      # Core: LERP/SLERP/RegMean/Task Vector classes
+│   └── metrics.py             # Evaluation: CKA, midness, geodesic metrics
+├── scripts/
+│   └── judgebench_eval.py     # JudgeBench A/B evaluation (LLM-as-judge)
+├── results/                   # Experimental summary CSVs
+│   ├── LERP.csv / LERP1.csv
+│   ├── SLERP.csv / SLERP!.csv
+│   ├── RegMean.csv / RegMean1.csv
+│   └── system_costs.csv
+├── artifacts/                 # [NOT IN GIT] Experimental outputs
+│   ├── SLERP/                # Scale×step raw (*.pkl) + summary
+│   ├── Lerp/
+│   ├── RegMean/
+│   ├── TaskVector/           # latent/weight merged TaskVector pkl
+│   └── root_pkls/            # Baselines, merged weights, responses
+├── requirements.txt
+├── README.md                  # This file
+└── CLAUDE.md                  # Detailed AI assistant guide
+```
+
+**Note**: The `artifacts/` directory containing large pkl files, model checkpoints, and merged weights is stored separately and not tracked in Git. See [Large File Deployment](#large-file-deployment) for details.
+
+## Installation
+
+### Prerequisites
+- Python 3.8+
+- CUDA-capable GPU (14-28GB VRAM recommended for dual 7B models)
+- OpenAI API key (for JudgeBench evaluation)
+
+### Setup
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
+# Clone repository
+git clone https://github.com/thisiskorea/Latent_Merging.git
+cd Latent_Merging
+
+# Create virtual environment
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install dependencies
 pip install -r requirements.txt
 ```
-필수: `torch`, `transformers`, `datasets`, `tqdm`, `pandas`, `openai`(v1) 등.
 
-## 대용량 파일 배치(별도 다운로드/복사)
-- 모델 체크포인트: `헬스케어_모델/` 등은 루트나 원하는 경로에 두고, 스크립트 인자로 경로 지정.
-- 응답/병합 결과: `SLERP/`, `Lerp/`, `RegMean/`, `Task Vector/`에 있는 `*.pkl`을 필요 시 복사해 동일 경로에 두면 평가 스크립트가 읽을 수 있습니다.
-- 합성 가중치: `weight_merged-*.pkl`, `latent_merged-*.pkl` 파일도 동일하게 별도 보관 후 참조 경로를 넘기세요.
+**Required packages**: `torch`, `transformers`, `datasets`, `tqdm`, `pandas`, `openai` (v1+), `scikit-learn`
 
-## 사용 예시
-- JudgeBench 평가(응답 pkl 두 개 비교):
-  ```bash
-  OPENAI_API_KEY=... python scripts/judgebench_eval.py \
-    --path-a SLERP/0.5_0.pkl \
-    --path-b Openthinker_비교용.pkl \
-    --judge-model gpt-4o-mini \
-    --out results/judgebench_eval.jsonl
-  ```
-- LERP/SLERP 생성:
-  ```python
-  from src.latent_merging import get_model, get_tokenizer, latent_mix_generate
-  tok = get_tokenizer("Qwen/Qwen2.5-7B-Instruct")
-  base = get_model("Qwen/Qwen2.5-7B-Instruct")
-  ft = get_model("open-thoughts/OpenThinker3-7B")
-  msgs = [{"role":"user","content":"간단히 자기소개해줘."}]
-  text = latent_mix_generate(base, ft, tok, messages=msgs, mix_layer=20, beta=0.5, mode="slerp")
-  print(text)
-  ```
-- RegMean/Task Vector는 동일 파일에서 `latent_regmean_generate`, `delta_generate`/`ActivationSteerer`를 참고하세요.
+## Quick Start
 
-## 주의
-- API 키를 하드코딩하지 마세요(환경변수 `OPENAI_API_KEY` 사용).
-- 결과 재현을 위해선 JudgeBench 데이터셋(`datasets` 라이브러리)과 위 경로의 pkl 산출물이 필요합니다. 큰 파일은 GitHub에 올리지 말고 외부 스토리지를 활용하세요.***
+### Basic Latent Merging (LERP/SLERP)
+
+```python
+from src.latent_merging import get_model, get_tokenizer, latent_mix_generate
+
+# Load models
+tokenizer = get_tokenizer("Qwen/Qwen2.5-7B-Instruct")
+base_model = get_model("Qwen/Qwen2.5-7B-Instruct")
+ft_model = get_model("open-thoughts/OpenThinker3-7B")
+
+# Prepare messages
+messages = [{"role": "user", "content": "Explain gradient descent simply."}]
+
+# Generate with SLERP at layer 20, beta=0.5
+text = latent_mix_generate(
+    base_model, ft_model, tokenizer,
+    messages=messages,
+    mix_layer=20,
+    beta=0.5,
+    mode="slerp",  # or "lerp"
+    max_new_tokens=512
+)
+print(text)
+```
+
+### RegMean and Task Vector
+
+```python
+from src.latent_merging import latent_regmean_generate, delta_generate, ActivationSteerer
+
+# RegMean merging
+text = latent_regmean_generate(
+    base_model, ft_model, tokenizer,
+    messages=messages,
+    mix_layers=[20, 21, 22, 23],
+    alpha=0.5
+)
+
+# Task Vector (delta steering)
+deltas = {20: delta_vector_layer20, 21: delta_vector_layer21}
+steerer = ActivationSteerer(base_model, deltas, alpha=0.1)
+# Generate with active steering
+output = base_model.generate(...)
+steerer.remove()  # Always clean up hooks
+```
+
+### JudgeBench Evaluation
+
+Compare two response sets using GPT-4o-mini as judge:
+
+```bash
+OPENAI_API_KEY=sk-... python scripts/judgebench_eval.py \
+  --path-a artifacts/SLERP/latent_0.5_layer20.pkl \
+  --path-b artifacts/root_pkls/OpenThinker_baseline.pkl \
+  --judge-model gpt-4o-mini \
+  --out results/comparison.jsonl
+```
+
+**Output**: Win rates, ties, statistical summary
+
+## Merging Methods
+
+### 1. LERP (Linear Interpolation)
+```python
+h' = (1 - α) * h_A + α * h_B
+```
+- Simple weighted average in Euclidean space
+- Best overall: **97.15%** vs 2.85% for weight merging (JudgeBench)
+
+### 2. SLERP (Spherical Linear Interpolation)
+```python
+# Geodesic interpolation on unit sphere with norm restoration
+θ = arccos(<u, v>)  # u, v are normalized
+h' = norm_interp * ((sin((1-α)θ)/sin(θ)) * u + (sin(αθ)/sin(θ)) * v)
+```
+- Preserves geometry, prevents collapse
+- **74.76%** vs 25.25% for weight merging
+- Higher representational similarity (CKA: 0.89 vs 0.35)
+
+### 3. RegMean (Regularized Mean)
+```python
+h' = mean([h_A, h_B]) - λ * R(h_i)
+```
+- Stabilized averaging with regularization
+- **69.82%** vs 30.18% for weight merging
+
+### 4. Task Vector (Delta Steering)
+```python
+h' = h + α * (h_FT - h_base)
+```
+- Additive activation steering
+- Highly controllable, layer-specific intervention
+
+## Key Results
+
+### Experiment A: Latent vs Weight Merging (JudgeBench)
+
+| Method  | Knowledge | Reasoning | Math | Coding | **Overall** |
+|---------|-----------|-----------|------|--------|-------------|
+| **SLERP** | 59.42 / 40.59 | **100.00 / 0.00** | 86.37 / 13.64 | 98.34 / 1.67 | **74.76 / 25.25** |
+| **LERP**  | 98.03 / 1.97  | 91.31 / 8.69  | 98.53 / 1.47  | **100.00 / 0.00** | **97.15 / 2.85** |
+| **RegMean** | 74.06 / 25.94 | 60.00 / 40.00 | 58.82 / 41.18 | 74.19 / 25.81 | **69.82 / 30.18** |
+
+*Format: Latent / Weight (win rates %)*
+
+**Key Finding**: Latent merging consistently dominates weight merging across all operators and task categories, with particularly dramatic improvements in reasoning (100% vs 0%) and coding (100% vs 0%).
+
+### Experiment B: Representation Similarity
+
+| Metric | Latent | Weight | Δ |
+|--------|--------|--------|---|
+| **CKA** ↑ | **0.83-0.89** | 0.32-0.35 | **+0.51** |
+| **Midness** ↑ | **0.77-0.80** | 0.61-0.64 | +0.15 |
+| **Arc Deviation** ↓ | **0.02-0.12** | 0.16-0.32 | **-0.16** |
+
+**Key Finding**: Latent merging preserves representational geometry significantly better, with ~50% improvement in CKA similarity.
+
+### Experiment C: Layer-wise Analysis
+
+**Best Configurations**:
+- **Later layers** (L20-L27) consistently outperform early/mid layers
+- **Higher ratios** (α ≈ 0.75) optimal in deeper layers
+- **RegMean** at L25, α=0.50: 47.34 (Qwen2.5), 96.94 (OpenThinker3)
+- **SLERP** at L20-L25, α=0.50-0.75: Strong across models
+
+## Large File Deployment
+
+Large artifacts are **not included** in this repository. To reproduce experiments:
+
+1. **Model Checkpoints**: Download models via Hugging Face or place local checkpoints in desired paths. Specify paths via script arguments.
+
+2. **Response/Merge Results**:
+   - `artifacts/SLERP/`, `Lerp/`, `RegMean/`: Scale×step pkl files (`*.pkl`, `*_summary.pkl`)
+   - `artifacts/TaskVector/`: `latent_merged-TaskVector.pkl`, `weight_merged-TaskVector.pkl`
+   - `artifacts/root_pkls/`: Baselines (`Qwen_baseline.pkl`, `OpenThinker_baseline.pkl`), merged weights, evaluation results
+
+3. **Merged Weights**: `weight_merged-*.pkl`, `latent_merged-*.pkl` stored separately. Reference paths in scripts.
+
+**Recommendation**: Store large files in external storage (Google Drive, S3, institutional storage) and download as needed.
+
+## Evaluation Framework
+
+We use **JudgeBench** for evaluation because:
+- Traditional exact-match metrics (e.g., MMLU-Pro) are sensitive to formatting and unstable for merged models
+- LLM-as-judge provides robust pairwise comparison across fluency, coherence, and correctness
+- Covers four domains: Knowledge (MMLU-Pro), Reasoning (LiveBench), Math (LiveBench), Coding (LiveCodeBench)
+
+
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.
+
+
